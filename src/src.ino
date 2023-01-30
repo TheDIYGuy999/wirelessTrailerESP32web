@@ -1,6 +1,5 @@
 /* Trailer for RC engine sound & LED controller for Arduino ESP32. Written by TheDIYGuy999
-
-
+use it in combination with: https://github.com/TheDIYGuy999/Rc_Engine_Sound_ESP32
 */
 
 char codeVersion[] = "1.0.0 beta"; // Software revision.
@@ -609,7 +608,6 @@ void eepromRead() {
   sideLightBrightness = EEPROM.readInt(adr_eprom_sideLightBrightness);
   reversingLightBrightness = EEPROM.readInt(adr_eprom_reversingLightBrightness);
   indicatorLightBrightness = EEPROM.readInt(adr_eprom_indicatorLightBrightness);
-  //readStringFromEEPROM(adr_eprom_ssid, &newStr3);
   readStringFromEEPROM(adr_eprom_ssid, &ssid);
   readStringFromEEPROM(adr_eprom_password, &password);
 
@@ -681,31 +679,26 @@ void webInterface() {
               // CSS styles for buttons
               client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center; background-color: rgb(60, 161, 120);}");
               client.println(".button { border: yes; color: white; padding: 10px 40px; width: 90%;");
-              client.println("text-decoration: none; font-size: 20px; margin: 2px; cursor: pointer;}");
+              client.println("text-decoration: none; font-size: 16px; margin: 2px; cursor: pointer;}");
               client.println(".slider { -webkit-appearance: none; width: 50%; height: 25px; background: #d3d3d3; outline: none; opacity: 0.7; -webkit-transition: .2s; transition: opacity .2s; }");
               client.println(".button1 {background-color: #4CAF50;}");
               client.println(".button2 {background-color: #ff0000;}");
-              client.println(".textbox {font-size: 18px; text-align: center;}");
+              client.println(".textbox {font-size: 16px; text-align: center;}");
               client.println("</style></head>");
 # endif
 
               // Website title
               client.println("</head><body><h1>TheDIYGuy999 Wireless Trailer</h1>");
-
-              // Sub title
-              //client.println("<h2>Settings</h2>");
+              client.printf("Software version %s\n", codeVersion);
 
               // Settings ------------------------------------------------------------------------------------------------------------
 
               // Set1 (ssid) ----------------------------------
               valueString = ssid; // Read current value
-              //client.println("<p><h3>Trailer SSID: <span id=\"textSetting1Value\">" + valueString + "</span>"); // Display current value
-              client.println("<p><h3>SSID: "); // Display current value
+              client.println("<p>SSID: "); // Display current value
 
-              client.println("<input type=\"text\" id=\"Setting1Input\" size=\"25\" class=\"textbox\" oninput=\"Setting1change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
+              client.println("<input type=\"text\" id=\"Setting1Input\" size=\"31\" maxlength=\"31\" class=\"textbox\" oninput=\"Setting1change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
               client.println("<script> function Setting1change(pos) { ");
-              //client.println("var sliderValue = document.getElementById(\"Setting1Input\").value;");
-              //client.println("document.getElementById(\"textSetting1Value\").innerHTML = sliderValue;");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Set1=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
@@ -715,15 +708,14 @@ void webInterface() {
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
                 Serial.println(valueString);
-                //valueString.toCharArray(ssid, 33);
                 ssid = valueString;
               }
 
               // Set2 (password) ----------------------------------
               valueString = password; // Read current value
-              client.println("<p><h3>Password (min. 8): "); // Display current value
+              client.println("<p>Password (min. 8): "); // Display current value
 
-              client.println("<input type=\"text\" id=\"Setting2Input\" size=\"25\" class=\"textbox\" oninput=\"Setting2change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
+              client.println("<input type=\"text\" id=\"Setting2Input\" size=\"31\" maxlength=\"31\" class=\"textbox\" oninput=\"Setting2change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
               client.println("<script> function Setting2change(pos) { ");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Set2=\" + pos + \"&\", true);");
@@ -733,11 +725,7 @@ void webInterface() {
                 pos1 = header.indexOf('='); // Start pos
                 pos2 = header.indexOf('&'); // End pos
                 valueString = header.substring(pos1 + 1, pos2);
-                //valueString.toCharArray(password, 33);
                 password = valueString;
-                //Serial.println(pos1);
-                //Serial.println(pos2);
-                //Serial.println(password);
               }
 
               client.println("<hr>"); // Horizontal line
@@ -745,13 +733,12 @@ void webInterface() {
 #if defined CUSTOM_MAC_ADDRESS
               // Checkbox1 (use custom mac) ----------------------------------
               if (useCustomMac == true) {
-                client.println("<p><h3><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save to EEPROM & reboot required) </input></p>");
+                client.println("<p><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save to EEPROM & reboot required): </input></p>");
               }
               else {
-                client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save to EEPROM & reboot required) </input></p>");
+                client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save to EEPROM & reboot required): </input></p>");
               }
               client.println("<script> function Checkbox1Change(pos) { ");
-              //client.println("ChangeCheckboxLabel(document.getElementById(\"tc\"));");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Checkbox1=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
@@ -765,15 +752,11 @@ void webInterface() {
                 Serial.println("don't use custom MAC (save to EEPROM & reboot required");
               }
 
-
-
-
-
               // Set3 (MAC0) ----------------------------------
               valueString = String(customMACAddress[0], HEX); // Read current value
-              client.println("<p><h3>Custom MAC: "); // Display title
+              //client.println("<p>Custom MAC: "); // Display title
 
-              client.println("<input type=\"text\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting3change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
+              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting3change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting3change(pos) { ");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Set3=\" + pos + \"&\", true);");
@@ -786,12 +769,11 @@ void webInterface() {
                 customMACAddress[0] = strtol(valueString.c_str(), NULL, 16);
               }
 
-
               // Set4 (MAC1) ----------------------------------
               valueString = String(customMACAddress[1], HEX); // Read current value
               client.println(":"); // Display title
 
-              client.println("<input type=\"text\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting4change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
+              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting4change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting4change(pos) { ");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Set4=\" + pos + \"&\", true);");
@@ -808,7 +790,7 @@ void webInterface() {
               valueString = String(customMACAddress[2], HEX); // Read current value
               client.println(":"); // Display title
 
-              client.println("<input type=\"text\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting5change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
+              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting5change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting5change(pos) { ");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Set5=\" + pos + \"&\", true);");
@@ -825,7 +807,7 @@ void webInterface() {
               valueString = String(customMACAddress[3], HEX); // Read current value
               client.println(":"); // Display title
 
-              client.println("<input type=\"text\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting6change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
+              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting6change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting6change(pos) { ");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Set6=\" + pos + \"&\", true);");
@@ -842,7 +824,7 @@ void webInterface() {
               valueString = String(customMACAddress[4], HEX); // Read current value
               client.println(":"); // Display title
 
-              client.println("<input type=\"text\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting7change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
+              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting7change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting7change(pos) { ");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Set7=\" + pos + \"&\", true);");
@@ -859,7 +841,7 @@ void webInterface() {
               valueString = String(customMACAddress[5], HEX); // Read current value
               client.println(":"); // Display title
 
-              client.println("<input type=\"text\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting8change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
+              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting8change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
               client.println("<script> function Setting8change(pos) { ");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Set8=\" + pos + \"&\", true);");
@@ -871,23 +853,24 @@ void webInterface() {
                 valueString = header.substring(pos1 + 1, pos2);
                 customMACAddress[5] = strtol(valueString.c_str(), NULL, 16);
               }
+
+              client.printf("<p>Use HEX values (0-9, A-F) only, always starting with FE");
 #endif
 
               // Currently uses MAC address info ----------------------------------
-              client.print("Currently used MAC address: ");
+              client.print("<p>Currently used MAC address: ");
               client.println(WiFi.macAddress());
 
               client.println("<hr>"); // Horizontal line
 
               // Checkbox2 (5th wheel setting) ----------------------------------
               if (fifthWhweelDetectionActive == true) {
-                client.println("<p><h3><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox2Change(this.checked)\"> 5th wheel detection switch active = lights off, if not coupled </input></p>");
+                client.println("<p><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox2Change(this.checked)\"> 5th wheel detection switch active = lights off, if not coupled </input></p>");
               }
               else {
                 client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox2Change(this.checked)\"> 5th wheel detection switch active = lights off, if not coupled </input></p>");
               }
               client.println("<script> function Checkbox2Change(pos) { ");
-              //client.println("ChangeCheckboxLabel(document.getElementById(\"tc\"));");
               client.println("var xhr = new XMLHttpRequest();");
               client.println("xhr.open('GET', \"/?Checkbox2=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
@@ -903,7 +886,7 @@ void webInterface() {
 
               // Slider1 (taillight brightness) ----------------------------------
               valueString = String(tailLightBrightness, DEC);
-              client.println("<p><h3>Taillight brightness % : <span id=\"textSlider1Value\">" + valueString + "</span>");
+              client.println("<p>Taillight brightness % : <span id=\"textSlider1Value\">" + valueString + "</span>");
               client.println("<input type=\"range\" min=\"5\" max=\"100\" step=\"5\" class=\"slider\" id=\"Slider1Input\" onchange=\"Slider1Change(this.value)\" value=\"" + valueString + "\" /></p>");
               client.println("<script> function Slider1Change(pos) { ");
               client.println("var slider1Value = document.getElementById(\"Slider1Input\").value;");
@@ -921,7 +904,7 @@ void webInterface() {
 
               // Slider2 (sidelight brightness) ----------------------------------
               valueString = String(sideLightBrightness, DEC);
-              client.println("<p><h3>Sidelight brightness % : <span id=\"textSlider2Value\">" + valueString + "</span>");
+              client.println("<p>Sidelight brightness % : <span id=\"textSlider2Value\">" + valueString + "</span>");
               client.println("<input type=\"range\" min=\"5\" max=\"100\" step=\"5\" class=\"slider\" id=\"Slider2Input\" onchange=\"Slider2Change(this.value)\" value=\"" + valueString + "\" /></p>");
               client.println("<script> function Slider2Change(pos) { ");
               client.println("var slider2Value = document.getElementById(\"Slider2Input\").value;");
@@ -939,7 +922,7 @@ void webInterface() {
 
               // Slider3 (reversing light brightness) ----------------------------------
               valueString = String(reversingLightBrightness, DEC);
-              client.println("<p><h3>Reversing light brightness % : <span id=\"textSlider3Value\">" + valueString + "</span>");
+              client.println("<p>Reversing light brightness % : <span id=\"textSlider3Value\">" + valueString + "</span>");
               client.println("<input type=\"range\" min=\"5\" max=\"100\" step=\"5\" class=\"slider\" id=\"Slider3Input\" onchange=\"Slider3Change(this.value)\" value=\"" + valueString + "\" /></p>");
               client.println("<script> function Slider3Change(pos) { ");
               client.println("var slider3Value = document.getElementById(\"Slider3Input\").value;");
@@ -957,7 +940,7 @@ void webInterface() {
 
               // Slider4 (indicator light brightness) ----------------------------------
               valueString = String(indicatorLightBrightness, DEC);
-              client.println("<p><h3>Indicator light brightness % : <span id=\"textSlider4Value\">" + valueString + "</span>");
+              client.println("<p>Indicator light brightness % : <span id=\"textSlider4Value\">" + valueString + "</span>");
               client.println("<input type=\"range\" min=\"5\" max=\"100\" step=\"5\" class=\"slider\" id=\"Slider4Input\" onchange=\"Slider4Change(this.value)\" value=\"" + valueString + "\" /></p>");
               client.println("<script> function Slider4Change(pos) { ");
               client.println("var slider4Value = document.getElementById(\"Slider4Input\").value;");
@@ -984,7 +967,7 @@ void webInterface() {
               }
 
               // button2 (Reboot controller) ----------------------------------
-              client.println("<p><a href=\"/reboot/on\"><button class=\"button button2\">Reboot controller (better use reset switch)</button></a></p>");
+              client.println("<p><a href=\"/reboot/on\"><button class=\"button button2\">Reboot controller (better disconnect battery)</button></a></p>");
 
               if (header.indexOf("GET /reboot/on") >= 0)
               {
