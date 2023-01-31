@@ -2,7 +2,7 @@
 use it in combination with: https://github.com/TheDIYGuy999/Rc_Engine_Sound_ESP32
 */
 
-char codeVersion[] = "1.0.0 beta"; // Software revision.
+char codeVersion[] = "1.0.0 beta 2"; // Software revision.
 
 //
 // =======================================================================================================
@@ -99,6 +99,9 @@ bool trailerCoupled;
 
 String ssid;
 String password;
+
+// MAC address for communication with tractor
+uint8_t customMACAddress[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 // Webserver on port 80
 WiFiServer server(80);
@@ -221,12 +224,10 @@ void setupEspNow() {
   IPAddress IP = WiFi.softAPIP();
 
   // Set custom MAC address
-#if defined CUSTOM_MAC_ADDRESS
   if (useCustomMac) {
     esp_wifi_set_mac(WIFI_IF_STA, &customMACAddress[0]);
     //esp_wifi_set_mac(ESP_IF_WIFI_STA, &customMACAddress[0]); // Board before 1.0.5
   }
-#endif
 
   // Print MAC address (this is the required MAC address in the transmitter)
   Serial.printf("\nInformations for communication with tractor ******************************************************\n");
@@ -554,20 +555,20 @@ void eepromErase() {
 void eepromInit() {
   if (EEPROM.readInt(adr_eprom_init) != eeprom_id) {
     EEPROM.writeInt(adr_eprom_init, eeprom_id);
-    EEPROM.writeInt(adr_eprom_useCustomMac, false);
-    EEPROM.writeInt(adr_eprom_Mac0, 0xFE); // Should always be 0xFE!
-    EEPROM.writeInt(adr_eprom_Mac1, 0x00); // Country number
-    EEPROM.writeInt(adr_eprom_Mac2, 0x00); // Region number
-    EEPROM.writeInt(adr_eprom_Mac3, 0x00);
-    EEPROM.writeInt(adr_eprom_Mac4, 0x00); // User Number
-    EEPROM.writeInt(adr_eprom_Mac5, 0x01); // 0x01 = trailer #1
-    EEPROM.writeInt(adr_eprom_fifthWhweelDetectionActive, false);
-    EEPROM.writeInt(adr_eprom_tailLightBrightness, 100);
-    EEPROM.writeInt(adr_eprom_sideLightBrightness, 100);
-    EEPROM.writeInt(adr_eprom_reversingLightBrightness, 100);
-    EEPROM.writeInt(adr_eprom_indicatorLightBrightness, 100);
-    writeStringToEEPROM(adr_eprom_ssid, "My_Trailer");
-    writeStringToEEPROM(adr_eprom_password, "123456789");
+    EEPROM.writeInt(adr_eprom_useCustomMac, DefaultUseCustomMac);
+    EEPROM.writeInt(adr_eprom_Mac0, defaultCustomMACAddress[0]); // Should always be 0xFE!
+    EEPROM.writeInt(adr_eprom_Mac1, defaultCustomMACAddress[1]); // Country number
+    EEPROM.writeInt(adr_eprom_Mac2, defaultCustomMACAddress[2]); // Region number
+    EEPROM.writeInt(adr_eprom_Mac3, defaultCustomMACAddress[3]); // User Number 1
+    EEPROM.writeInt(adr_eprom_Mac4, defaultCustomMACAddress[4]); // User Number 2
+    EEPROM.writeInt(adr_eprom_Mac5, defaultCustomMACAddress[5]); // 0x01 = trailer #1
+    EEPROM.writeInt(adr_eprom_fifthWhweelDetectionActive, defaulFifthWhweelDetectionActive);
+    EEPROM.writeInt(adr_eprom_tailLightBrightness, defaultLightsBrightness);
+    EEPROM.writeInt(adr_eprom_sideLightBrightness, defaultLightsBrightness);
+    EEPROM.writeInt(adr_eprom_reversingLightBrightness, defaultLightsBrightness);
+    EEPROM.writeInt(adr_eprom_indicatorLightBrightness, defaultLightsBrightness);
+    writeStringToEEPROM(adr_eprom_ssid, default_ssid);
+    writeStringToEEPROM(adr_eprom_password, default_password);
     EEPROM.commit();
     Serial.println("EEPROM initialized.");
   }
@@ -680,7 +681,7 @@ void webInterface() {
               client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center; background-color: rgb(60, 161, 120);}");
               client.println(".button { border: yes; color: white; padding: 10px 40px; width: 90%;");
               client.println("text-decoration: none; font-size: 16px; margin: 2px; cursor: pointer;}");
-              client.println(".slider { -webkit-appearance: none; width: 50%; height: 25px; background: #d3d3d3; outline: none; opacity: 0.7; -webkit-transition: .2s; transition: opacity .2s; }");
+              client.println(".slider { -webkit-appearance: none; width: 80%; height: 25px; background: #d3d3d3; outline: none; opacity: 0.7; -webkit-transition: .2s; transition: opacity .2s; }");
               client.println(".button1 {background-color: #4CAF50;}");
               client.println(".button2 {background-color: #ff0000;}");
               client.println(".textbox {font-size: 16px; text-align: center;}");
@@ -730,13 +731,12 @@ void webInterface() {
 
               client.println("<hr>"); // Horizontal line
 
-#if defined CUSTOM_MAC_ADDRESS
               // Checkbox1 (use custom mac) ----------------------------------
               if (useCustomMac == true) {
-                client.println("<p><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save to EEPROM & reboot required): </input></p>");
+                client.println("<p><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save settings & reboot required): </input></p>");
               }
               else {
-                client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save to EEPROM & reboot required): </input></p>");
+                client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save settings & reboot required): </input></p>");
               }
               client.println("<script> function Checkbox1Change(pos) { ");
               client.println("var xhr = new XMLHttpRequest();");
@@ -855,7 +855,7 @@ void webInterface() {
               }
 
               client.printf("<p>Use HEX values (0-9, A-F) only, always starting with FE");
-#endif
+
 
               // Currently uses MAC address info ----------------------------------
               client.print("<p>Currently used MAC address: ");
@@ -959,7 +959,7 @@ void webInterface() {
               client.println("<hr>"); // Horizontal line
 
               // button1 (Save settings to EEPROM) ----------------------------------
-              client.println("<p><a href=\"/save/on\"><button class=\"button button1\">Save settings to EEPROM</button></a></p>");
+              client.println("<p><a href=\"/save/on\"><button class=\"button button1\">Save settings</button></a></p>");
 
               if (header.indexOf("GET /save/on") >= 0)
               {
