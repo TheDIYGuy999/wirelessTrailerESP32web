@@ -2,7 +2,7 @@
 use it in combination with: https://github.com/TheDIYGuy999/Rc_Engine_Sound_ESP32
 */
 
-char codeVersion[] = "1.0.0 beta 3"; // Software revision.
+char codeVersion[] = "1.0-beta.4"; // Software revision.
 
 //
 // =======================================================================================================
@@ -12,8 +12,8 @@ char codeVersion[] = "1.0.0 beta 3"; // Software revision.
 //
 
 // All the required user settings are done in the following .h files:
-#include "0_generalSettings.h"          // <<------- general settings
-#include "7_adjustmentsServos.h"        // <<------- Servo output related adjustments
+#include "0_generalSettings.h"   // <<------- general settings
+#include "7_adjustmentsServos.h" // <<------- Servo output related adjustments
 
 //
 // =======================================================================================================
@@ -27,12 +27,12 @@ char codeVersion[] = "1.0.0 beta 3"; // Software revision.
 #include <statusLED.h> // https://github.com/TheDIYGuy999/statusLED <<------- required for LED control
 
 // No need to install these, they come with the ESP32 board definition
-#include "driver/mcpwm.h"  // for servo PWM output
+#include "driver/mcpwm.h" // for servo PWM output
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
-#include <Esp.h>           // for displaying memory information
-#include "rom/rtc.h"       // for displaying reset reason
+#include <Esp.h>     // for displaying memory information
+#include "rom/rtc.h" // for displaying reset reason
 #include "EEPROM.h"
 
 // The following tasks are not required for Visual Studio Code IDE! ----
@@ -54,11 +54,11 @@ char codeVersion[] = "1.0.0 beta 3"; // Software revision.
 // provides short circuit protection. Also works on the serial Rx pin "VP" (36)
 // ------------------------------------------------------------------------------------
 
-#define TAILLIGHT_PIN 15 // Red tail- & brake-lights (combined)
-#define INDICATOR_LEFT_PIN 2 // Orange left indicator (turn signal) light
-#define INDICATOR_RIGHT_PIN 4 // Orange right indicator (turn signal) light
+#define TAILLIGHT_PIN 15       // Red tail- & brake-lights (combined)
+#define INDICATOR_LEFT_PIN 2   // Orange left indicator (turn signal) light
+#define INDICATOR_RIGHT_PIN 4  // Orange right indicator (turn signal) light
 #define REVERSING_LIGHT_PIN 17 // (TX2) White reversing light
-#define SIDELIGHT_PIN 18 // Side lights
+#define SIDELIGHT_PIN 18       // Side lights
 
 #define SERVO_1_PIN 13 // Servo CH1 legs
 #define SERVO_2_PIN 12 // Servo CH2 ramps
@@ -79,7 +79,8 @@ statusLED sideLight(false);
 
 esp_now_peer_info_t peerInfo; // This MUST be global!! Transmission is not working otherwise!
 
-typedef struct struct_message { // This is the data packet
+typedef struct struct_message
+{ // This is the data packet
   uint8_t tailLight;
   uint8_t sideLight;
   uint8_t reversingLight;
@@ -131,7 +132,7 @@ uint8_t indicatorLightBrightness = 100;
 // Eeprom size and storage addresses -----------------------------------------------------------------
 #define EEPROM_SIZE 256 // 256 Bytes (512 is maximum)
 
-#define adr_eprom_init 0                          // Eeprom initialized or not?
+#define adr_eprom_init 0 // Eeprom initialized or not?
 #define adr_eprom_useCustomMac 4
 #define adr_eprom_Mac0 8
 #define adr_eprom_Mac1 12
@@ -144,8 +145,8 @@ uint8_t indicatorLightBrightness = 100;
 #define adr_eprom_sideLightBrightness 40
 #define adr_eprom_reversingLightBrightness 44
 #define adr_eprom_indicatorLightBrightness 48
-#define adr_eprom_ssid 64  //64
-#define adr_eprom_password 128 //128
+#define adr_eprom_ssid 64      // 64
+#define adr_eprom_password 128 // 128
 
 //
 // =======================================================================================================
@@ -154,10 +155,11 @@ uint8_t indicatorLightBrightness = 100;
 //
 
 // callback function that will be executed when data is received
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len)
+{
   memcpy(&trailerData, incomingData, sizeof(trailerData));
 
-  //led(); // This is now handled in loop
+  // led(); // This is now handled in loop
 
   Serial.print("Tailllight: ");
   Serial.println(trailerData.tailLight * tailLightBrightness / 100);
@@ -190,24 +192,25 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
 //
 // See: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/mcpwm.html#configure
 
-void setupMcpwm() {
+void setupMcpwm()
+{
   // 1. set our servo output pins
-  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_1_PIN);    //Set legs as PWM0A
-  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0B, SERVO_2_PIN);    //Set ramps as PWM0B
-  mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM1A, SERVO_4_PIN);    //Set beacon as PWM1A
-  mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM1B, SERVO_3_PIN);    //Set spare servo as PWM1B
+  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_1_PIN); // Set legs as PWM0A
+  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0B, SERVO_2_PIN); // Set ramps as PWM0B
+  mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM1A, SERVO_4_PIN); // Set beacon as PWM1A
+  mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM1B, SERVO_3_PIN); // Set spare servo as PWM1B
 
   // 2. configure MCPWM parameters
   mcpwm_config_t pwm_config;
-  pwm_config.frequency = SERVO_FREQUENCY;     //frequency usually = 50Hz, some servos may run smoother @ 100Hz
-  pwm_config.cmpr_a = 0;                      //duty cycle of PWMxa = 0
-  pwm_config.cmpr_b = 0;                      //duty cycle of PWMxb = 0
+  pwm_config.frequency = SERVO_FREQUENCY; // frequency usually = 50Hz, some servos may run smoother @ 100Hz
+  pwm_config.cmpr_a = 0;                  // duty cycle of PWMxa = 0
+  pwm_config.cmpr_b = 0;                  // duty cycle of PWMxb = 0
   pwm_config.counter_mode = MCPWM_UP_COUNTER;
-  pwm_config.duty_mode = MCPWM_DUTY_MODE_0;   // 0 = not inverted, 1 = inverted
+  pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // 0 = not inverted, 1 = inverted
 
   // 3. configure channels with settings above
-  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);    //Configure PWM0A & PWM0B
-  mcpwm_init(MCPWM_UNIT_1, MCPWM_TIMER_1, &pwm_config);    //Configure PWM1A & PWM1B
+  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config); // Configure PWM0A & PWM0B
+  mcpwm_init(MCPWM_UNIT_1, MCPWM_TIMER_1, &pwm_config); // Configure PWM1A & PWM1B
 }
 
 //
@@ -216,7 +219,8 @@ void setupMcpwm() {
 // =======================================================================================================
 //
 
-void setupEspNow() {
+void setupEspNow()
+{
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
 
@@ -224,14 +228,15 @@ void setupEspNow() {
   IPAddress IP = WiFi.softAPIP();
 
   // Set custom MAC address
-  if (useCustomMac) {
+  if (useCustomMac)
+  {
     esp_wifi_set_mac(WIFI_IF_STA, &customMACAddress[0]);
-    //esp_wifi_set_mac(ESP_IF_WIFI_STA, &customMACAddress[0]); // Board before 1.0.5
+    // esp_wifi_set_mac(ESP_IF_WIFI_STA, &customMACAddress[0]); // Board before 1.0.5
   }
 
   // Print MAC address (this is the required MAC address in the transmitter)
   Serial.printf("\nInformations for communication with tractor ******************************************************\n");
-  Serial.print("Currently used MAC address (add it in '10_adjustmentsTrailer.h' in the sound controller): ");
+  Serial.print("Currently used MAC address (add it in '10_Trailer.h' in the sound controller): ");
   Serial.println(WiFi.macAddress());
   Serial.printf("Custom MAC address: %02X:%02X:%02X:%02X:%02X:%02X\n", customMACAddress[0], customMACAddress[1], customMACAddress[2], customMACAddress[3], customMACAddress[4], customMACAddress[5]);
 
@@ -247,26 +252,15 @@ void setupEspNow() {
 
   WiFi.softAP(ssid.c_str(), password.c_str());
 
-  Serial.printf("\nWiFi Tx Power Level: %u",WiFi.getTxPower());
-  /*WIFI_POWER_19_5dBm = 78,// 19.5dBm
-  WIFI_POWER_19dBm = 76,// 19dBm
-  WIFI_POWER_18_5dBm = 74,// 18.5dBm
-  WIFI_POWER_17dBm = 68,// 17dBm
-  WIFI_POWER_15dBm = 60,// 15dBm
-  WIFI_POWER_13dBm = 52,// 13dBm
-  WIFI_POWER_11dBm = 44,// 11dBm
-  WIFI_POWER_8_5dBm = 34,// 8.5dBm
-  WIFI_POWER_7dBm = 28,// 7dBm
-  WIFI_POWER_5dBm = 20,// 5dBm
-  WIFI_POWER_2dBm = 8,// 2dBm
-  WIFI_POWER_MINUS_1dBm = -4// -1dBm*/
-  WiFi.setTxPower (WIFI_POWER_2dBm); // Set power to lowest possible value WIFI_POWER_2dBm (WIFI_POWER_MINUS_1dBm is not working for me)
-  Serial.printf("\nWiFi Tx Power Level changed to: %u\n\n",WiFi.getTxPower());
+  Serial.printf("\nWiFi Tx Power Level: %u", WiFi.getTxPower());
+  WiFi.setTxPower(cpType); // WiFi and ESP-Now power according to "0_generalSettings.h"
+  Serial.printf("\nWiFi Tx Power Level changed to: %u\n\n", WiFi.getTxPower());
 
-  server.begin();  // Start Webserver
+  server.begin(); // Start Webserver
 
   // Init ESP-NOW
-  if (esp_now_init() != ESP_OK) {
+  if (esp_now_init() != ESP_OK)
+  {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
@@ -281,15 +275,17 @@ void setupEspNow() {
 // =======================================================================================================
 //
 
-void setupEeprom() {
+void setupEeprom()
+{
   EEPROM.begin(EEPROM_SIZE);
-#if defined  ERASE_EEPROM_ON_BOOT
+#if defined ERASE_EEPROM_ON_BOOT
   eepromErase(); // uncomment this option, if you want to erase all stored settings!
-# endif
+#endif
   eepromInit(); // Init new board with default values
   eepromRead(); // Read settings from Eeprom
-  Serial.print("eeprom_id: ");
+  Serial.print("current eeprom_id: ");
   Serial.println(EEPROM.read(adr_eprom_init));
+  Serial.println("change it for default value upload!\n");
   eepromDebugRead(); // Shows content of entire eeprom, except of empty areas
 }
 
@@ -299,7 +295,8 @@ void setupEeprom() {
 // =======================================================================================================
 //
 
-void setup() {
+void setup()
+{
 
 #if defined LOW_POWER_MODE
   setCpuFrequencyMhz(80); // Lower CPU clock frequency to 80MHz to save energy
@@ -317,16 +314,18 @@ void setup() {
   Serial.printf("XTAL Frequency: %i MHz, CPU Clock: %i MHz, APB Bus Clock: %i Hz\n", getXtalFrequencyMhz(), getCpuFrequencyMhz(), getApbFrequency());
   Serial.printf("Internal RAM size: %i Byte, Free: %i Byte\n", ESP.getHeapSize(), ESP.getFreeHeap());
   Serial.printf("WiFi MAC address: %s\n", WiFi.macAddress().c_str());
-  for (uint8_t coreNum = 0; coreNum < 2; coreNum++) {
+  for (uint8_t coreNum = 0; coreNum < 2; coreNum++)
+  {
     uint8_t resetReason = rtc_get_reset_reason(coreNum);
-    if (resetReason <= (sizeof(RESET_REASONS) / sizeof(RESET_REASONS[0]))) {
+    if (resetReason <= (sizeof(RESET_REASONS) / sizeof(RESET_REASONS[0])))
+    {
       Serial.printf("Core %i reset reason: %i: %s\n", coreNum, rtc_get_reset_reason(coreNum), RESET_REASONS[resetReason - 1]);
     }
   }
 
   Serial.printf("**************************************************************************************************\n\n");
 
-  //Eeprom setup
+  // Eeprom setup
   setupEeprom();
 
   // Pin setup
@@ -336,11 +335,11 @@ void setup() {
   setupEspNow();
 
   // LED setup (note, that we only have timers from 0 - 15)
-  tailLight.begin(TAILLIGHT_PIN, 2, 20000); // Timer 2, 20kHz
-  sideLight.begin(SIDELIGHT_PIN, 3, 20000); // Timer 3, 20kHz
+  tailLight.begin(TAILLIGHT_PIN, 2, 20000);            // Timer 2, 20kHz
+  sideLight.begin(SIDELIGHT_PIN, 3, 20000);            // Timer 3, 20kHz
   reversingLight.begin(REVERSING_LIGHT_PIN, 4, 20000); // Timer 4, 20kHz
-  indicatorL.begin(INDICATOR_LEFT_PIN, 5, 20000); // Timer 5, 20kHz
-  indicatorR.begin(INDICATOR_RIGHT_PIN, 6, 20000); // Timer 6, 20kHz
+  indicatorL.begin(INDICATOR_LEFT_PIN, 5, 20000);      // Timer 5, 20kHz
+  indicatorR.begin(INDICATOR_RIGHT_PIN, 6, 20000);     // Timer 6, 20kHz
 
   tailLight.pwm(255 * tailLightBrightness / 100);
   sideLight.pwm(255 * sideLightBrightness / 100);
@@ -367,12 +366,14 @@ void setup() {
 // =======================================================================================================
 //
 
-void switchDetect() {
+void switchDetect()
+{
   static unsigned long switchMillis;
 
-  if (!digitalRead(FIFTH_WHEEL_DETECTION_PIN) || !fifthWhweelDetectionActive) { // only read switch, if enabled
+  if (!digitalRead(FIFTH_WHEEL_DETECTION_PIN) || !fifthWhweelDetectionActive)
+  {                          // only read switch, if enabled
     switchMillis = millis(); // if coupled
-    //Serial.println("coupled");
+    // Serial.println("coupled");
   }
 
   trailerCoupled = (millis() - switchMillis <= 1000); // 1s delay, if not coupled
@@ -384,16 +385,19 @@ void switchDetect() {
 // =======================================================================================================
 //
 
-void led() {
+void led()
+{
 
-  if (trailerCoupled) {
+  if (trailerCoupled)
+  {
     tailLight.pwm(trailerData.tailLight * tailLightBrightness / 100);
     sideLight.pwm(trailerData.sideLight * sideLightBrightness / 100);
     reversingLight.pwm(trailerData.reversingLight * reversingLightBrightness / 100);
     indicatorL.pwm(trailerData.indicatorL * indicatorLightBrightness / 100);
     indicatorR.pwm(trailerData.indicatorR * indicatorLightBrightness / 100);
   }
-  else {
+  else
+  {
     tailLight.pwm(0);
     sideLight.pwm(0);
     reversingLight.pwm(0);
@@ -408,7 +412,8 @@ void led() {
 // =======================================================================================================
 //
 
-bool beaconControl(uint8_t pulses) {
+bool beaconControl(uint8_t pulses)
+{
 
   /* Beacons: "RC DIY LED Rotating Beacon Light Flash For 1/10 Truck Crawler Toy"
       from: https://www.ebay.ch/itm/303979210629
@@ -425,23 +430,28 @@ bool beaconControl(uint8_t pulses) {
   static unsigned long pulseWidth = CH3L;
   static uint8_t i;
 
-  if (millis() - pulseMillis > 40) { // Every 40ms (this is the required minimum)
+  if (millis() - pulseMillis > 40)
+  { // Every 40ms (this is the required minimum)
     pulseMillis = millis();
-    if (pulseWidth == CH3L) {
+    if (pulseWidth == CH3L)
+    {
       pulseWidth = CH3R;
     }
-    else {
+    else
+    {
       pulseWidth = CH3L;
       i++;
     }
     mcpwm_set_duty_in_us(MCPWM_UNIT_1, MCPWM_TIMER_1, MCPWM_OPR_B, pulseWidth);
   }
 
-  if (i >= pulses) {
+  if (i >= pulses)
+  {
     i = 0;
     return true;
   }
-  else return false;
+  else
+    return false;
 }
 
 //
@@ -451,27 +461,37 @@ bool beaconControl(uint8_t pulses) {
 //
 // See: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/mcpwm.html#configure
 
-void mcpwmOutput() {
+void mcpwmOutput()
+{
 
   // Legs servo CH1 (active, if 5th wheel is unlocked, use horn pot) **********************
 
 #ifdef LEGS_ESC_MODE // ESC mode
   static uint16_t legsServoMicros = CH1L;
-  if (trailerData.legsDown) legsServoMicros = CH1L; // down
-  else if (trailerData.legsUp) legsServoMicros = CH1R; // up
-  else legsServoMicros = CH1C; // off
+  if (trailerData.legsDown)
+    legsServoMicros = CH1L; // down
+  else if (trailerData.legsUp)
+    legsServoMicros = CH1R; // up
+  else
+    legsServoMicros = CH1C; // off
 
-#else // Servo mode  
+#else // Servo mode
   static uint16_t legsServoMicrosTarget = CH1L;
   static uint16_t legsServoMicros = CH1L;
   static unsigned long legsDelayMicros;
-  if (micros() - legsDelayMicros > LEGS_RAMP_TIME) {
+  if (micros() - legsDelayMicros > LEGS_RAMP_TIME)
+  {
     legsDelayMicros = micros();
-    if (trailerData.legsDown) legsServoMicrosTarget = CH1L; // down
-    else if (trailerData.legsUp) legsServoMicrosTarget = CH1R; // up
-    else legsServoMicrosTarget = legsServoMicros; // stop
-    if (legsServoMicros < legsServoMicrosTarget) legsServoMicros ++;
-    if (legsServoMicros > legsServoMicrosTarget) legsServoMicros --;
+    if (trailerData.legsDown)
+      legsServoMicrosTarget = CH1L; // down
+    else if (trailerData.legsUp)
+      legsServoMicrosTarget = CH1R; // up
+    else
+      legsServoMicrosTarget = legsServoMicros; // stop
+    if (legsServoMicros < legsServoMicrosTarget)
+      legsServoMicros++;
+    if (legsServoMicros > legsServoMicrosTarget)
+      legsServoMicros--;
   }
 #endif
   mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, legsServoMicros);
@@ -479,21 +499,30 @@ void mcpwmOutput() {
   // Ramps servo CH2 (active, if hazards are on, use horn pot) *****************************
 #ifdef RAMPS_ESC_MODE // ESC mode
   static uint16_t rampsServoMicros = CH2L;
-  if (trailerData.rampsDown) rampsServoMicros = CH2L; // down
-  else if (trailerData.rampsUp) rampsServoMicros = CH2R; // up
-  else rampsServoMicros = CH2C; // off
+  if (trailerData.rampsDown)
+    rampsServoMicros = CH2L; // down
+  else if (trailerData.rampsUp)
+    rampsServoMicros = CH2R; // up
+  else
+    rampsServoMicros = CH2C; // off
 
-#else // Servo mode 
+#else // Servo mode
   static uint16_t rampsServoMicrosTarget = CH2R;
   static uint16_t rampsServoMicros = CH2R;
   static unsigned long rampsDelayMicros;
-  if (micros() - rampsDelayMicros > RAMPS_RAMP_TIME) {
+  if (micros() - rampsDelayMicros > RAMPS_RAMP_TIME)
+  {
     rampsDelayMicros = micros();
-    if (trailerData.rampsDown) rampsServoMicrosTarget = CH2L; // down
-    else if (trailerData.rampsUp) rampsServoMicrosTarget = CH2R; // up
-    else rampsServoMicrosTarget = rampsServoMicros; // stop
-    if (rampsServoMicros < rampsServoMicrosTarget) rampsServoMicros ++;
-    if (rampsServoMicros > rampsServoMicrosTarget) rampsServoMicros --;
+    if (trailerData.rampsDown)
+      rampsServoMicrosTarget = CH2L; // down
+    else if (trailerData.rampsUp)
+      rampsServoMicrosTarget = CH2R; // up
+    else
+      rampsServoMicrosTarget = rampsServoMicros; // stop
+    if (rampsServoMicros < rampsServoMicrosTarget)
+      rampsServoMicros++;
+    if (rampsServoMicros > rampsServoMicrosTarget)
+      rampsServoMicros--;
   }
 #endif
   mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, rampsServoMicros);
@@ -501,22 +530,29 @@ void mcpwmOutput() {
   // Beacon control CH3 (use horn / blue light pot)******************************************
   // Init (5 pulses are required to shut beacons off after power on)
   static bool blueLightInit;
-  if (!blueLightInit) {
-    if (beaconControl(5)) blueLightInit = true;
+  if (!blueLightInit)
+  {
+    if (beaconControl(5))
+      blueLightInit = true;
   }
 
   // Switching modes
   static uint16_t beaconServoMicros;
   static bool lockRotating, lockOff;
-  if (blueLightInit) {
-    if (trailerData.beaconsOn && !lockRotating) { // Rotating mode on (1 pulse)
-      if (beaconControl(1)) {
+  if (blueLightInit)
+  {
+    if (trailerData.beaconsOn && !lockRotating)
+    { // Rotating mode on (1 pulse)
+      if (beaconControl(1))
+      {
         lockRotating = true;
         lockOff = false;
       }
     }
-    if (!trailerData.beaconsOn && !lockOff && lockRotating) { // Off (4 pulses)
-      if (beaconControl(4)) {
+    if (!trailerData.beaconsOn && !lockOff && lockRotating)
+    { // Off (4 pulses)
+      if (beaconControl(4))
+      {
         lockOff = true;
         lockRotating = false;
       }
@@ -533,20 +569,24 @@ void mcpwmOutput() {
 // Write string to EEPROM ------
 // https://roboticsbackend.com/arduino-write-string-in-eeprom/#Write_the_String
 
-int writeStringToEEPROM(int addrOffset, const String &strToWrite) {
+int writeStringToEEPROM(int addrOffset, const String &strToWrite)
+{
   byte len = strToWrite.length();
   EEPROM.write(addrOffset, len);
-  for (int i = 0; i < len; i++) {
+  for (int i = 0; i < len; i++)
+  {
     EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
   }
   return addrOffset + 1 + len;
 }
 
 // Read string from EEPROM ------
-int readStringFromEEPROM(int addrOffset, String *strToRead) {
+int readStringFromEEPROM(int addrOffset, String *strToRead)
+{
   int newStrLen = EEPROM.read(addrOffset);
   char data[newStrLen + 1];
-  for (int i = 0; i < newStrLen; i++) {
+  for (int i = 0; i < newStrLen; i++)
+  {
     data[i] = EEPROM.read(addrOffset + 1 + i);
   }
   data[newStrLen] = '\0';
@@ -555,8 +595,10 @@ int readStringFromEEPROM(int addrOffset, String *strToRead) {
 }
 
 // Erase EEPROM ------
-void eepromErase() {
-  for (int i = 0; i < EEPROM_SIZE; i++) {
+void eepromErase()
+{
+  for (int i = 0; i < EEPROM_SIZE; i++)
+  {
     EEPROM.write(i, 0);
   }
   EEPROM.commit();
@@ -566,8 +608,10 @@ void eepromErase() {
 }
 
 // Init new board with the default values you want ------
-void eepromInit() {
-  if (EEPROM.readInt(adr_eprom_init) != eeprom_id) {
+void eepromInit()
+{
+  if (EEPROM.readInt(adr_eprom_init) != eeprom_id)
+  {
     EEPROM.writeInt(adr_eprom_init, eeprom_id);
     EEPROM.writeInt(adr_eprom_useCustomMac, DefaultUseCustomMac);
     EEPROM.writeInt(adr_eprom_Mac0, defaultCustomMACAddress[0]); // Should always be 0xFE!
@@ -589,7 +633,8 @@ void eepromInit() {
 }
 
 // Write new values to EEPROM ------
-void eepromWrite() {
+void eepromWrite()
+{
   EEPROM.writeInt(adr_eprom_useCustomMac, useCustomMac);
   EEPROM.writeInt(adr_eprom_Mac0, customMACAddress[0]);
   EEPROM.writeInt(adr_eprom_Mac1, customMACAddress[1]);
@@ -610,7 +655,8 @@ void eepromWrite() {
 }
 
 // Read values from EEPROM ------
-void eepromRead() {
+void eepromRead()
+{
   useCustomMac = EEPROM.readInt(adr_eprom_useCustomMac);
   customMACAddress[0] = EEPROM.readInt(adr_eprom_Mac0);
   customMACAddress[1] = EEPROM.readInt(adr_eprom_Mac1);
@@ -629,18 +675,20 @@ void eepromRead() {
   Serial.println("EEPROM read.");
 }
 
-void eepromDebugRead() {
-# if defined DEBUG
+void eepromDebugRead()
+{
+#if defined DEBUG
   String eepromDebug;
   Serial.println("EEPROM debug dump begin **********************************************");
   eepromDebug = "";
-  for (int i = 0; i < EEPROM_SIZE; ++i) {
+  for (int i = 0; i < EEPROM_SIZE; ++i)
+  {
     eepromDebug += char(EEPROM.read(i));
   }
   Serial.println(eepromDebug);
   Serial.println("");
   Serial.println("EEPROM debug dump end ************************************************");
-# endif
+#endif
 }
 
 //
@@ -649,35 +697,40 @@ void eepromDebugRead() {
 // =======================================================================================================
 //
 
-void webInterface() {
+void webInterface()
+{
 
-  static unsigned long currentTime = millis();   // Current time
-  static unsigned long previousTime = 0;         // Previous time
-  const long timeoutTime = 2000;          // Define timeout time in milliseconds (example: 2000ms = 2s)
+  static unsigned long currentTime = millis(); // Current time
+  static unsigned long previousTime = 0;       // Previous time
+  const long timeoutTime = 2000;               // Define timeout time in milliseconds (example: 2000ms = 2s)
 
   static bool Mode = false; // TODO
 
+  if (true)
+  { // Wifi on
+    // if (WIFI_ON == 1) {     //Wifi on
+    WiFiClient client = server.available(); // Listen for incoming clients
 
-
-  if (true) {     //Wifi on
-    //if (WIFI_ON == 1) {     //Wifi on
-    WiFiClient client = server.available();   // Listen for incoming clients
-
-    if (client) {                             // If a new client connects,
+    if (client)
+    { // If a new client connects,
       currentTime = millis();
       previousTime = currentTime;
-      Serial.println("New Client.");          // print a message out in the serial port
-      String currentLine = "";                // make a String to hold incoming data from the client
-      while (client.connected() && currentTime - previousTime <= timeoutTime) { // loop while the client's connected
+      Serial.println("New Client."); // print a message out in the serial port
+      String currentLine = "";       // make a String to hold incoming data from the client
+      while (client.connected() && currentTime - previousTime <= timeoutTime)
+      { // loop while the client's connected
         currentTime = millis();
-        if (client.available()) {             // if there's bytes to read from the client,
-          char c = client.read();             // read a byte, then
-          Serial.write(c);                    // print it out the serial monitor
+        if (client.available())
+        {                         // if there's bytes to read from the client,
+          char c = client.read(); // read a byte, then
+          Serial.write(c);        // print it out the serial monitor
           header += c;
-          if (c == '\n') {                    // if the byte is a newline character
+          if (c == '\n')
+          { // if the byte is a newline character
             // if the current line is blank, you got two newline characters in a row.
             // that's the end of the client HTTP request, so send a response:
-            if (currentLine.length() == 0) {
+            if (currentLine.length() == 0)
+            {
               // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
               // and a content-type so the client knows what's coming, then a blank line:
               client.println("HTTP/1.1 200 OK");
@@ -696,11 +749,12 @@ void webInterface() {
               client.println(".button { border: yes; color: white; padding: 10px 40px; width: 90%;");
               client.println("text-decoration: none; font-size: 16px; margin: 2px; cursor: pointer;}");
               client.println(".slider { -webkit-appearance: none; width: 80%; height: 25px; background: #d3d3d3; outline: none; opacity: 0.7; -webkit-transition: .2s; transition: opacity .2s; }");
-              client.println(".button1 {background-color: #4CAF50;}");
-              client.println(".button2 {background-color: #ff0000;}");
+              client.println(".buttonGreen {background-color: #4CAF50;}");
+              client.println(".buttonRed {background-color: #ff0000;}");
+              client.println(".buttonGrey {background-color: #7A7A7A;}");
               client.println(".textbox {font-size: 16px; text-align: center;}");
               client.println("</style></head>");
-# endif
+#endif
 
               // Website title
               client.println("</head><body><h1>TheDIYGuy999 Wireless Trailer</h1>");
@@ -709,7 +763,7 @@ void webInterface() {
               // Settings ------------------------------------------------------------------------------------------------------------
 
               // Set1 (ssid) ----------------------------------
-              valueString = ssid; // Read current value
+              valueString = ssid;          // Read current value
               client.println("<p>SSID: "); // Display current value
 
               client.println("<input type=\"text\" id=\"Setting1Input\" size=\"31\" maxlength=\"31\" class=\"textbox\" oninput=\"Setting1change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
@@ -718,7 +772,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Set1=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Set1=") >= 0) {
+              if (header.indexOf("GET /?Set1=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -727,7 +782,7 @@ void webInterface() {
               }
 
               // Set2 (password) ----------------------------------
-              valueString = password; // Read current value
+              valueString = password;                   // Read current value
               client.println("<p>Password (min. 8): "); // Display current value
 
               client.println("<input type=\"text\" id=\"Setting2Input\" size=\"31\" maxlength=\"31\" class=\"textbox\" oninput=\"Setting2change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
@@ -736,20 +791,23 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Set2=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Set2=") >= 0) {
+              if (header.indexOf("GET /?Set2=") >= 0)
+              {
                 pos1 = header.indexOf('='); // Start pos
                 pos2 = header.indexOf('&'); // End pos
                 valueString = header.substring(pos1 + 1, pos2);
                 password = valueString;
               }
 
-              client.println("<hr>"); // Horizontal line
+              client.println("<hr>"); // Horizontal line *******************************************************************************************************
 
               // Checkbox1 (use custom mac) ----------------------------------
-              if (useCustomMac == true) {
+              if (useCustomMac == true)
+              {
                 client.println("<p><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save settings & reboot required): </input></p>");
               }
-              else {
+              else
+              {
                 client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save settings & reboot required): </input></p>");
               }
               client.println("<script> function Checkbox1Change(pos) { ");
@@ -757,18 +815,20 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Checkbox1=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Checkbox1=true") >= 0) {
+              if (header.indexOf("GET /?Checkbox1=true") >= 0)
+              {
                 useCustomMac = true;
                 Serial.println("use custom MAC (save to EEPROM & reboot required");
               }
-              else if (header.indexOf("GET /?Checkbox1=false") >= 0) {
+              else if (header.indexOf("GET /?Checkbox1=false") >= 0)
+              {
                 useCustomMac = false;
                 Serial.println("don't use custom MAC (save to EEPROM & reboot required");
               }
 
               // Set3 (MAC0) ----------------------------------
               valueString = String(customMACAddress[0], HEX); // Read current value
-              //client.println("<p>Custom MAC: "); // Display title
+              // client.println("<p>Custom MAC: "); // Display title
 
               client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting3change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting3change(pos) { ");
@@ -776,7 +836,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Set3=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Set3=") >= 0) {
+              if (header.indexOf("GET /?Set3=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -785,7 +846,7 @@ void webInterface() {
 
               // Set4 (MAC1) ----------------------------------
               valueString = String(customMACAddress[1], HEX); // Read current value
-              client.println(":"); // Display title
+              client.println(":");                            // Display title
 
               client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting4change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting4change(pos) { ");
@@ -793,7 +854,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Set4=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Set4=") >= 0) {
+              if (header.indexOf("GET /?Set4=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -802,7 +864,7 @@ void webInterface() {
 
               // Set5 (MAC2) ----------------------------------
               valueString = String(customMACAddress[2], HEX); // Read current value
-              client.println(":"); // Display title
+              client.println(":");                            // Display title
 
               client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting5change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting5change(pos) { ");
@@ -810,7 +872,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Set5=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Set5=") >= 0) {
+              if (header.indexOf("GET /?Set5=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -819,7 +882,7 @@ void webInterface() {
 
               // Set6 (MAC3) ----------------------------------
               valueString = String(customMACAddress[3], HEX); // Read current value
-              client.println(":"); // Display title
+              client.println(":");                            // Display title
 
               client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting6change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting6change(pos) { ");
@@ -827,7 +890,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Set6=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Set6=") >= 0) {
+              if (header.indexOf("GET /?Set6=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -836,7 +900,7 @@ void webInterface() {
 
               // Set7 (MAC4) ----------------------------------
               valueString = String(customMACAddress[4], HEX); // Read current value
-              client.println(":"); // Display title
+              client.println(":");                            // Display title
 
               client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting7change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
               client.println("<script> function Setting7change(pos) { ");
@@ -844,7 +908,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Set7=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Set7=") >= 0) {
+              if (header.indexOf("GET /?Set7=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -853,7 +918,7 @@ void webInterface() {
 
               // Set8 (MAC5) ----------------------------------
               valueString = String(customMACAddress[5], HEX); // Read current value
-              client.println(":"); // Display title
+              client.println(":");                            // Display title
 
               client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting8change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
               client.println("<script> function Setting8change(pos) { ");
@@ -861,7 +926,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Set8=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Set8=") >= 0) {
+              if (header.indexOf("GET /?Set8=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -870,7 +936,6 @@ void webInterface() {
 
               client.printf("<p>Use HEX values (0-9, A-F) only, always starting with FE");
 
-
               // Currently uses MAC address info ----------------------------------
               client.print("<p>Currently used MAC address: ");
               client.println(WiFi.macAddress());
@@ -878,10 +943,12 @@ void webInterface() {
               client.println("<hr>"); // Horizontal line
 
               // Checkbox2 (5th wheel setting) ----------------------------------
-              if (fifthWhweelDetectionActive == true) {
+              if (fifthWhweelDetectionActive == true)
+              {
                 client.println("<p><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox2Change(this.checked)\"> 5th wheel detection switch active = lights off, if not coupled </input></p>");
               }
-              else {
+              else
+              {
                 client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox2Change(this.checked)\"> 5th wheel detection switch active = lights off, if not coupled </input></p>");
               }
               client.println("<script> function Checkbox2Change(pos) { ");
@@ -889,11 +956,13 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Checkbox2=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Checkbox2=true") >= 0) {
+              if (header.indexOf("GET /?Checkbox2=true") >= 0)
+              {
                 fifthWhweelDetectionActive = true;
                 Serial.println("5th wheel detection switch active");
               }
-              else if (header.indexOf("GET /?Checkbox2=false") >= 0) {
+              else if (header.indexOf("GET /?Checkbox2=false") >= 0)
+              {
                 fifthWhweelDetectionActive = false;
                 Serial.println("5th wheel detection switch inactive");
               }
@@ -909,7 +978,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Slider1=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Slider1=") >= 0) {
+              if (header.indexOf("GET /?Slider1=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -927,7 +997,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Slider2=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Slider2=") >= 0) {
+              if (header.indexOf("GET /?Slider2=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -945,7 +1016,8 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Slider3=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Slider3=") >= 0) {
+              if (header.indexOf("GET /?Slider3=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
@@ -963,29 +1035,74 @@ void webInterface() {
               client.println("xhr.open('GET', \"/?Slider4=\" + pos + \"&\", true);");
               client.println("xhr.send(); } </script>");
 
-              if (header.indexOf("GET /?Slider4=") >= 0) {
+              if (header.indexOf("GET /?Slider4=") >= 0)
+              {
                 pos1 = header.indexOf('=');
                 pos2 = header.indexOf('&');
                 valueString = header.substring(pos1 + 1, pos2);
                 indicatorLightBrightness = (valueString.toInt());
               }
 
-              client.println("<hr>"); // Horizontal line
+              client.println("<hr>"); // Horizontal line *******************************************************************************************************
 
               // button1 (Save settings to EEPROM) ----------------------------------
-              client.println("<p><a href=\"/save/on\"><button class=\"button button1\">Save settings</button></a></p>");
+              client.println("<p><a href=\"/save/on\"><button class=\"button buttonRed\" onclick=\"restartPopup()\" >Save settings & restart</button></a></p>");
 
               if (header.indexOf("GET /save/on") >= 0)
               {
                 eepromWrite();
-              }
-
-              // button2 (Reboot controller) ----------------------------------
-              client.println("<p><a href=\"/reboot/on\"><button class=\"button button2\">Reboot controller (better disconnect battery)</button></a></p>");
-
-              if (header.indexOf("GET /reboot/on") >= 0)
-              {
+                delay(1000);
                 ESP.restart();
+              }
+              client.println("<script> function restartPopup() {");
+              client.println("alert(\"Controller restarted, you may need to reconnect WiFi!\"); ");
+              client.println("} </script>");
+
+              client.println("<hr>"); // Horizontal line *******************************************************************************************************
+              /*
+                                                    // button2 (Legs up) ----------------------------------
+                                                    client.println("<p><a href=\"/legs/up\"><button class=\"button buttonGrey\" >Legs up</button></a></p>");
+
+                                                    if (header.indexOf("GET /legs/up") >= 0)
+                                                    {
+                                                      Serial.println("Legs up");
+                                                    }
+
+                                                                  // button3 (Legs down) ----------------------------------
+                                                                  client.println("<p><a href=\"/legs/down\"><button class=\"button buttonGrey\" >Legs down</button></a></p>");
+
+                                                                  if (header.indexOf("GET /legs/down") >= 0)
+                                                                  {
+                                                                    Serial.println("Legs down");
+                                                                  }
+
+                                                                  // button4 (test) ----------------------------------
+                                                                  client.println("<p><button class=\"button buttonGrey\" onclick=\"buttonTestPressed(this)\" >Test button</button></p>");
+                                                                  client.println("<p id=\"demo\"></p>");
+                                                                  */
+              /*
+                            client.println("<script> function buttonTestPressed() { ");
+                              //document.getElementById("demo").innerHTML = "Hello World";
+                            client.println("var slider3Value = document.getElementById(\"demo\").value;");
+                            client.println("} </script>");
+              */
+              /*
+                            client.print(F("<a href='/datastart' target='DataBox'><button type='button'>Agg.Auto</button></a>"));
+              */
+              client.println("<script> function buttonTestPressed(pos) { ");
+              client.println("var xhr = new XMLHttpRequest();");
+              client.println("xhr.open('GET', \"/?testButton=\" + pos + \"&\", true);");
+              client.println("xhr.send(); } </script>");
+
+              if (header.indexOf("GET /?testButton=true") >= 0)
+              {
+                // fifthWhweelDetectionActive = true;
+                Serial.println("Test pressed");
+              }
+              else if (header.indexOf("GET /?testButton=false") >= 0)
+              {
+                // fifthWhweelDetectionActive = false;
+                Serial.println("Test not pressed");
               }
 
               //-----------------------------------------------------------------------------------------------------------------------
@@ -995,11 +1112,15 @@ void webInterface() {
               client.println();
               // Break out of the while loop
               break;
-            } else { // if you got a newline, then clear currentLine
+            }
+            else
+            { // if you got a newline, then clear currentLine
               currentLine = "";
             }
-          } else if (c != '\r') {  // if you got anything else but a carriage return character,
-            currentLine += c;      // add it to the end of the currentLine
+          }
+          else if (c != '\r')
+          {                   // if you got anything else but a carriage return character,
+            currentLine += c; // add it to the end of the currentLine
           }
         }
       }
@@ -1022,7 +1143,8 @@ void webInterface() {
 // =======================================================================================================
 //
 
-void loop() {
+void loop()
+{
 
   switchDetect();
   mcpwmOutput();

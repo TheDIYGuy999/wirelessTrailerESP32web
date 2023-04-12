@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 
 /* GENERAL SETTINGS ************************************************************************************************
  *  Have a look at the serial monitor in order to check the current settings of your vehicle!
@@ -12,6 +13,24 @@
 uint8_t eeprom_id = 2; // change this id (between 1 and 255), if you want to restore EEPROM defaults (only executed 1x) <<------------- NOTE!
 //#define ERASE_EEPROM_ON_BOOT // EEPROM is completely overwritten, if defined! Never define it, trailer will not work!
 // only define it in order to clean up junk from old projects in your EEPROM
+
+// Wireless settings -------------------------------------------------------------------------------------------------------------------------------
+#define ENABLE_WIRELESS // Define this, if you want to use an ESP-Now wireless trailer or the WiFi configuration via 192.168.4.1
+
+/* Wifi & ESP-Now and ESP-Now transmission power: less power = less speaker noise & longer battery life. Valid options are:
+WIFI_POWER_19_5dBm = 78     // full power
+WIFI_POWER_19dBm = 76
+WIFI_POWER_18_5dBm = 74
+WIFI_POWER_17dBm = 68
+WIFI_POWER_15dBm = 60
+WIFI_POWER_13dBm = 52
+WIFI_POWER_11dBm = 44
+WIFI_POWER_8_5dBm = 34
+WIFI_POWER_7dBm = 28         // recommended setting
+WIFI_POWER_5dBm = 20
+WIFI_POWER_2dBm = 8          // lowest setting, WiFi may become weak, NOT RECOMMENDED!
+*/ 
+wifi_power_t cpType = WIFI_POWER_7dBm; // Only use values from above!
 
 // WiFi settings (for vehicle configuration website, open 192.168.4.1 in your browser)----------------------------
 // Note: if these credentials were changed, using the configuration website, 
