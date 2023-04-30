@@ -15,9 +15,8 @@ uint8_t eeprom_id = 2; // change this id (between 1 and 255), if you want to res
 // only define it in order to clean up junk from old projects in your EEPROM
 
 // Wireless settings -------------------------------------------------------------------------------------------------------------------------------
-#define ENABLE_WIRELESS // Define this, if you want to use an ESP-Now wireless trailer or the WiFi configuration via 192.168.4.1
 
-/* Wifi & ESP-Now and ESP-Now transmission power: less power = less speaker noise & longer battery life. Valid options are:
+/* Wifi & ESP-Now and ESP-Now transmission power: less power = longer battery life. Valid options are:
 WIFI_POWER_19_5dBm = 78     // full power
 WIFI_POWER_19dBm = 76
 WIFI_POWER_18_5dBm = 74
@@ -39,7 +38,8 @@ String default_ssid = "My_Trailer"; // Select this network
 String default_password = "123456789"; // Then enter this password
 
 // Configuration website settings --------------------------------------------------------------------------------
-#define USE_CSS // Simple Website style is used, if not defined
+#define USE_CSS // Simple, unformatted Website style is used, if not defined
+#define MODERN_CSS // Use modern CSS with scaling for better adaption between different devices
 
 // ESP-Now settings (for wireless communication with your tractor) -----------------------------------------------
 // Select, wether or not you want to use your own trailer MAC address below
@@ -62,4 +62,4 @@ bool defaulFifthWhweelDetectionActive = false; // 5th wheel detection switch act
 uint8_t defaultLightsBrightness = 100; // Led lights default brightness
 
 // Power settings ------------------------------------------------------------------------------------------------
-#define LOW_POWER_MODE // Uncommenting this will lower the clock to 80MHz and will increase battery life
+#define LOW_POWER_MODE // Uncommenting this will lower the clock to 80MHz and will increase battery life (110mA instead of 135)

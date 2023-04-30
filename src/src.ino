@@ -2,7 +2,24 @@
 use it in combination with: https://github.com/TheDIYGuy999/Rc_Engine_Sound_ESP32
 */
 
-char codeVersion[] = "1.0-beta.4"; // Software revision.
+char codeVersion[] = "1.0-beta.5"; // Software revision.
+
+//
+// =======================================================================================================
+// ERROR CODES (INDICATOR LIGHTS)
+// =======================================================================================================
+//
+/*
+   Indicators:
+   - Constantly on = no SBUS signal (check "sbusInverted" true / false in "2_Remote.h")
+   - Number of blinks = this channel signal is not between 1400 and 1600 microseconds and can't be auto calibrated (check channel trim settings)
+   - 2 fast blinks = battery error during powering up (see below)
+   - 3 fast blinks = no valid receiver bus signal detected / wrong remote configuration
+
+   Beeps (only, if "#define BATTERY_PROTECTION" in "3_ESC.h"):
+   - Number of beeps = number of detected battery cells in series
+   - 10 fast beeps = battery error, disconnect it!
+*/
 
 //
 // =======================================================================================================
@@ -12,8 +29,9 @@ char codeVersion[] = "1.0-beta.4"; // Software revision.
 //
 
 // All the required user settings are done in the following .h files:
-#include "0_generalSettings.h"   // <<------- general settings
-#include "7_adjustmentsServos.h" // <<------- Servo output related adjustments
+#include "0_generalSettings.h" // <<------- general settings
+#include "3_Battery.h"         // <<------- Battery related adjustments
+#include "7_Servos.h"          // <<------- Servo output related adjustments
 
 //
 // =======================================================================================================
@@ -24,15 +42,17 @@ char codeVersion[] = "1.0-beta.4"; // Software revision.
 // Libraries (you have to install all of them in the "Arduino sketchbook"/libraries folder)
 // !! Do NOT install the libraries in the sketch folder.
 // No manual library download is required in Visual Studio Code IDE (see platformio.ini)
-#include <statusLED.h> // https://github.com/TheDIYGuy999/statusLED <<------- required for LED control
+#include <statusLED.h>       // https://github.com/TheDIYGuy999/statusLED <<------- required for LED control
+#include <ESP32AnalogRead.h> // https://github.com/madhephaestus/ESP32AnalogRead <<------- required for battery voltage measurement
 
 // No need to install these, they come with the ESP32 board definition
 #include "driver/mcpwm.h" // for servo PWM output
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
-#include <Esp.h>     // for displaying memory information
-#include "rom/rtc.h" // for displaying reset reason
+#include <Esp.h>         // for displaying memory information
+#include "rom/rtc.h"     // for displaying reset reason
+#include "soc/rtc_wdt.h" // for watchdog timer
 #include "EEPROM.h"
 
 // The following tasks are not required for Visual Studio Code IDE! ----
@@ -67,6 +87,8 @@ char codeVersion[] = "1.0-beta.4"; // Software revision.
 
 #define FIFTH_WHEEL_DETECTION_PIN 32 // This NO switch is closed, if the trailer is coupled to the 5th wheel. Between Pin 32 and GND
 
+#define BATTERY_DETECT_PIN 39 // Voltage divider resistors connected to pin "VN & GND"
+
 // Objects *************************************************************************************
 // Status LED objects -----
 statusLED tailLight(false); // "false" = output not inversed
@@ -74,6 +96,9 @@ statusLED indicatorL(false);
 statusLED indicatorR(false);
 statusLED reversingLight(false);
 statusLED sideLight(false);
+
+// Battery voltage
+ESP32AnalogRead battery;
 
 // Global variables ****************************************************************************
 
@@ -114,6 +139,12 @@ String header;
 String valueString = "";
 int pos1 = 0;
 int pos2 = 0;
+
+// Battery
+float batteryCutoffvoltage;
+float batteryVoltage;
+uint8_t numberOfCells;
+bool batteryProtection = false;
 
 // These are used to print the reset reason on startup
 const char *RESET_REASONS[] = {"POWERON_RESET", "NO_REASON", "SW_RESET", "OWDT_RESET", "DEEPSLEEP_RESET", "SDIO_RESET", "TG0WDT_SYS_RESET", "TG1WDT_SYS_RESET", "RTCWDT_SYS_RESET", "INTRUSION_RESET", "TGWDT_CPU_RESET", "SW_CPU_RESET", "RTCWDT_CPU_RESET", "EXT_CPU_RESET", "RTCWDT_BROWN_OUT_RESET", "RTCWDT_RTC_RESET"};
@@ -271,6 +302,61 @@ void setupEspNow()
 
 //
 // =======================================================================================================
+// BATTERY SETUP
+// =======================================================================================================
+//
+
+void setupBattery()
+{
+#if defined BATTERY_PROTECTION
+
+  Serial.printf("Battery voltage: %.2f V\n", batteryVolts());
+  Serial.printf("Cutoff voltage per cell: %.2f V\n", CUTOFF_VOLTAGE);
+  Serial.printf("Fully charged voltage per cell: %.2f V\n", FULLY_CHARGED_VOLTAGE);
+
+#define CELL_SETPOINT (CUTOFF_VOLTAGE - ((FULLY_CHARGED_VOLTAGE - CUTOFF_VOLTAGE) / 2))
+
+  if (batteryVolts() <= CELL_SETPOINT * 2)
+    numberOfCells = 1;
+  if (batteryVolts() > CELL_SETPOINT * 2)
+    numberOfCells = 2;
+  if (batteryVolts() > CELL_SETPOINT * 3)
+    numberOfCells = 3;
+  if (batteryVolts() > FULLY_CHARGED_VOLTAGE * 3)
+    numberOfCells = 4;
+  batteryCutoffvoltage = CUTOFF_VOLTAGE * numberOfCells; // Calculate cutoff voltage for battery protection
+  if (numberOfCells > 1 && numberOfCells < 4)
+  { // Only 2S & 3S batteries are supported!
+    Serial.printf("Number of cells: %i (%iS battery detected) Based on setpoint: %.2f V\n", numberOfCells, numberOfCells, (CELL_SETPOINT * numberOfCells));
+    Serial.printf("Battery cutoff voltage: %.2f V (%i * %.2f V) \n", batteryCutoffvoltage, numberOfCells, CUTOFF_VOLTAGE);
+    for (uint8_t beeps = 0; beeps < numberOfCells; beeps++)
+    {                    // Number of beeps = number of cells in series
+                         // tone(26, 3000, 4, 0);
+      tone(26, 3000, 4); // For platform = espressif32@4.3.0
+      delay(200);
+    }
+  }
+  else
+  {
+    Serial.printf("Error, no valid battery detected! Only 2S & 3S batteries are supported!\n");
+    Serial.printf("REMOVE BATTERY, CONTROLLER IS LOCKED = 2 FAST FLASHES!\n");
+    bool locked = true;
+    while (locked)
+    {
+      // wait here forever!
+      indicatorL.flash(70, 75, 500, 2); // Show 2 fast flashes on indicators!
+      indicatorR.flash(70, 75, 500, 2);
+      rtc_wdt_feed(); // Feed watchdog timer
+    }
+  }
+#else
+  Serial.printf("Warning, BATTERY_PROTECTION disabled!\n");
+#endif
+  Serial.printf("-------------------------------------\n");
+}
+
+//
+// =======================================================================================================
 // EEPROM SETUP
 // =======================================================================================================
 //
@@ -305,6 +391,9 @@ void setup()
   // Serial setup
   Serial.begin(115200); // USB serial (for DEBUG)
 
+  // ADC setup
+  battery.attach(BATTERY_DETECT_PIN);
+
   // Print some system and software info to serial monitor
   delay(1000); // Give serial port/connection some time to get ready
   Serial.printf("\n**************************************************************************************************\n");
@@ -323,6 +412,13 @@ void setup()
     }
   }
 
+#if defined BATTERY_PROTECTION
+  Serial.printf("Battery protection calibration data:\n");
+  Serial.printf("RESISTOR_TO_BATTTERY_PLUS: %i Ω\n", RESISTOR_TO_BATTTERY_PLUS);
+  Serial.printf("RESISTOR_TO_GND: %i Ω\n", RESISTOR_TO_GND);
+  Serial.printf("DIODE_DROP: %.2f V\n", DIODE_DROP);
+#endif
+
   Serial.printf("**************************************************************************************************\n\n");
 
   // Eeprom setup
@@ -331,8 +427,7 @@ void setup()
   // Pin setup
   pinMode(FIFTH_WHEEL_DETECTION_PIN, INPUT_PULLUP);
 
-  // ESP NOW setup
-  setupEspNow();
+  delay(1000);
 
   // LED setup (note, that we only have timers from 0 - 15)
   tailLight.begin(TAILLIGHT_PIN, 2, 20000);            // Timer 2, 20kHz
@@ -340,6 +435,12 @@ void setup()
   reversingLight.begin(REVERSING_LIGHT_PIN, 4, 20000); // Timer 4, 20kHz
   indicatorL.begin(INDICATOR_LEFT_PIN, 5, 20000);      // Timer 5, 20kHz
   indicatorR.begin(INDICATOR_RIGHT_PIN, 6, 20000);     // Timer 6, 20kHz
+
+  // Battery setup
+  setupBattery();
+
+  // ESP NOW setup
+  setupEspNow();
 
   tailLight.pwm(255 * tailLightBrightness / 100);
   sideLight.pwm(255 * sideLightBrightness / 100);
@@ -388,7 +489,7 @@ void switchDetect()
 void led()
 {
 
-  if (trailerCoupled)
+  if (trailerCoupled && !batteryProtection)
   {
     tailLight.pwm(trailerData.tailLight * tailLightBrightness / 100);
     sideLight.pwm(trailerData.sideLight * sideLightBrightness / 100);
@@ -401,8 +502,16 @@ void led()
     tailLight.pwm(0);
     sideLight.pwm(0);
     reversingLight.pwm(0);
-    indicatorL.pwm(0);
-    indicatorR.pwm(0);
+    if (!batteryProtection)
+    {
+      indicatorL.pwm(0);
+      indicatorR.pwm(0);
+    }
+    else
+    {
+      indicatorL.flash(70, 75, 500, 2); // Show 2 fast flashes on indicators!
+      indicatorR.flash(70, 75, 500, 2);
+    }
   }
 }
 
@@ -693,449 +802,67 @@ void eepromDebugRead()
 
 //
 // =======================================================================================================
+// BATTERY MONITORING
+// =======================================================================================================
+//
+
+float batteryVolts()
+{
+  static float raw[6];
+  static bool initDone = false;
+#define VOLTAGE_CALIBRATION (RESISTOR_TO_BATTTERY_PLUS + RESISTOR_TO_GND) / RESISTOR_TO_GND + DIODE_DROP
+
+  if (!initDone)
+  { // Init array, if first measurement (important for call in setup)!
+    for (uint8_t i = 0; i <= 5; i++)
+    {
+      raw[i] = battery.readVoltage();
+    }
+    initDone = true;
+  }
+
+  raw[5] = raw[4]; // Move array content, then add latest measurement (averaging)
+  raw[4] = raw[3];
+  raw[3] = raw[2];
+  raw[2] = raw[1];
+  raw[1] = raw[0];
+
+  raw[0] = battery.readVoltage(); // read analog input
+
+  float voltage = (raw[0] + raw[1] + raw[2] + raw[3] + raw[4] + raw[5]) / 6 * VOLTAGE_CALIBRATION;
+  return voltage;
+}
+// -----------------------------------
+
+void batteryProt()
+{
+#if defined BATTERY_PROTECTION
+  static unsigned long lastBatteryTime;
+  if (millis() - lastBatteryTime > 300)
+  { // Check battery voltage every 300ms
+    lastBatteryTime = millis();
+    batteryVoltage = batteryVolts(); // Store voltage in global variable (also used in dashboard)
+    if (batteryVoltage < batteryCutoffvoltage)
+    {
+      Serial.printf("Battery protection triggered, slowing down! Battery: %.2f V Threshold: %.2f V \n", batteryVoltage, batteryCutoffvoltage);
+      Serial.printf("Disconnect battery to prevent it from overdischarging!\n", batteryVoltage, batteryCutoffvoltage);
+      batteryProtection = true;
+    }
+    if (batteryVoltage > batteryCutoffvoltage + (FULLY_CHARGED_VOLTAGE * numberOfCells))
+    { // Recovery hysteresis
+      batteryProtection = false;
+    }
+  }
+#endif
+}
+
+//
+// =======================================================================================================
 // WEB INTERFACE
 // =======================================================================================================
 //
 
-void webInterface()
-{
-
-  static unsigned long currentTime = millis(); // Current time
-  static unsigned long previousTime = 0;       // Previous time
-  const long timeoutTime = 2000;               // Define timeout time in milliseconds (example: 2000ms = 2s)
-
-  static bool Mode = false; // TODO
-
-  if (true)
-  { // Wifi on
-    // if (WIFI_ON == 1) {     //Wifi on
-    WiFiClient client = server.available(); // Listen for incoming clients
-
-    if (client)
-    { // If a new client connects,
-      currentTime = millis();
-      previousTime = currentTime;
-      Serial.println("New Client."); // print a message out in the serial port
-      String currentLine = "";       // make a String to hold incoming data from the client
-      while (client.connected() && currentTime - previousTime <= timeoutTime)
-      { // loop while the client's connected
-        currentTime = millis();
-        if (client.available())
-        {                         // if there's bytes to read from the client,
-          char c = client.read(); // read a byte, then
-          Serial.write(c);        // print it out the serial monitor
-          header += c;
-          if (c == '\n')
-          { // if the byte is a newline character
-            // if the current line is blank, you got two newline characters in a row.
-            // that's the end of the client HTTP request, so send a response:
-            if (currentLine.length() == 0)
-            {
-              // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-              // and a content-type so the client knows what's coming, then a blank line:
-              client.println("HTTP/1.1 200 OK");
-              client.println("Content-type:text/html");
-              client.println("Connection: close");
-              client.println();
-
-              // Display the HTML web page
-              client.println("<!DOCTYPE html><html>");
-              client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-              client.println("<link rel=\"icon\" href=\"data:,\">");
-
-#if defined USE_CSS
-              // CSS styles for buttons
-              client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center; background-color: rgb(60, 161, 120);}");
-              client.println(".button { border: yes; color: white; padding: 10px 40px; width: 90%;");
-              client.println("text-decoration: none; font-size: 16px; margin: 2px; cursor: pointer;}");
-              client.println(".slider { -webkit-appearance: none; width: 80%; height: 25px; background: #d3d3d3; outline: none; opacity: 0.7; -webkit-transition: .2s; transition: opacity .2s; }");
-              client.println(".buttonGreen {background-color: #4CAF50;}");
-              client.println(".buttonRed {background-color: #ff0000;}");
-              client.println(".buttonGrey {background-color: #7A7A7A;}");
-              client.println(".textbox {font-size: 16px; text-align: center;}");
-              client.println("</style></head>");
-#endif
-
-              // Website title
-              client.println("</head><body><h1>TheDIYGuy999 Wireless Trailer</h1>");
-              client.printf("Software version %s\n", codeVersion);
-
-              // Settings ------------------------------------------------------------------------------------------------------------
-
-              // Set1 (ssid) ----------------------------------
-              valueString = ssid;          // Read current value
-              client.println("<p>SSID: "); // Display current value
-
-              client.println("<input type=\"text\" id=\"Setting1Input\" size=\"31\" maxlength=\"31\" class=\"textbox\" oninput=\"Setting1change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
-              client.println("<script> function Setting1change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Set1=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Set1=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                Serial.println(valueString);
-                ssid = valueString;
-              }
-
-              // Set2 (password) ----------------------------------
-              valueString = password;                   // Read current value
-              client.println("<p>Password (min. 8): "); // Display current value
-
-              client.println("<input type=\"text\" id=\"Setting2Input\" size=\"31\" maxlength=\"31\" class=\"textbox\" oninput=\"Setting2change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
-              client.println("<script> function Setting2change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Set2=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Set2=") >= 0)
-              {
-                pos1 = header.indexOf('='); // Start pos
-                pos2 = header.indexOf('&'); // End pos
-                valueString = header.substring(pos1 + 1, pos2);
-                password = valueString;
-              }
-
-              client.println("<hr>"); // Horizontal line *******************************************************************************************************
-
-              // Checkbox1 (use custom mac) ----------------------------------
-              if (useCustomMac == true)
-              {
-                client.println("<p><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save settings & reboot required): </input></p>");
-              }
-              else
-              {
-                client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox1Change(this.checked)\"> use custom MAC (save settings & reboot required): </input></p>");
-              }
-              client.println("<script> function Checkbox1Change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Checkbox1=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Checkbox1=true") >= 0)
-              {
-                useCustomMac = true;
-                Serial.println("use custom MAC (save to EEPROM & reboot required");
-              }
-              else if (header.indexOf("GET /?Checkbox1=false") >= 0)
-              {
-                useCustomMac = false;
-                Serial.println("don't use custom MAC (save to EEPROM & reboot required");
-              }
-
-              // Set3 (MAC0) ----------------------------------
-              valueString = String(customMACAddress[0], HEX); // Read current value
-              // client.println("<p>Custom MAC: "); // Display title
-
-              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting3change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
-              client.println("<script> function Setting3change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Set3=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Set3=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                customMACAddress[0] = strtol(valueString.c_str(), NULL, 16);
-              }
-
-              // Set4 (MAC1) ----------------------------------
-              valueString = String(customMACAddress[1], HEX); // Read current value
-              client.println(":");                            // Display title
-
-              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting4change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
-              client.println("<script> function Setting4change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Set4=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Set4=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                customMACAddress[1] = strtol(valueString.c_str(), NULL, 16);
-              }
-
-              // Set5 (MAC2) ----------------------------------
-              valueString = String(customMACAddress[2], HEX); // Read current value
-              client.println(":");                            // Display title
-
-              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting5change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
-              client.println("<script> function Setting5change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Set5=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Set5=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                customMACAddress[2] = strtol(valueString.c_str(), NULL, 16);
-              }
-
-              // Set6 (MAC3) ----------------------------------
-              valueString = String(customMACAddress[3], HEX); // Read current value
-              client.println(":");                            // Display title
-
-              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting6change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
-              client.println("<script> function Setting6change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Set6=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Set6=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                customMACAddress[3] = strtol(valueString.c_str(), NULL, 16);
-              }
-
-              // Set7 (MAC4) ----------------------------------
-              valueString = String(customMACAddress[4], HEX); // Read current value
-              client.println(":");                            // Display title
-
-              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting7change(this.value)\" value=\"" + valueString + "\" />"); // Set new value (no </p> = no new line)
-              client.println("<script> function Setting7change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Set7=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Set7=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                customMACAddress[4] = strtol(valueString.c_str(), NULL, 16);
-              }
-
-              // Set8 (MAC5) ----------------------------------
-              valueString = String(customMACAddress[5], HEX); // Read current value
-              client.println(":");                            // Display title
-
-              client.println("<input type=\"text\" style=\"text-transform: uppercase\" size=\"2\" maxlength=\"2\" class=\"textbox\" oninput=\"Setting8change(this.value)\" value=\"" + valueString + "\" /></p>"); // Set new value
-              client.println("<script> function Setting8change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Set8=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Set8=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                customMACAddress[5] = strtol(valueString.c_str(), NULL, 16);
-              }
-
-              client.printf("<p>Use HEX values (0-9, A-F) only, always starting with FE");
-
-              // Currently uses MAC address info ----------------------------------
-              client.print("<p>Currently used MAC address: ");
-              client.println(WiFi.macAddress());
-
-              client.println("<hr>"); // Horizontal line
-
-              // Checkbox2 (5th wheel setting) ----------------------------------
-              if (fifthWhweelDetectionActive == true)
-              {
-                client.println("<p><input type=\"checkbox\" id=\"tc\" checked onclick=\"Checkbox2Change(this.checked)\"> 5th wheel detection switch active = lights off, if not coupled </input></p>");
-              }
-              else
-              {
-                client.println("<p><input type=\"checkbox\" id=\"tc\" unchecked onclick=\"Checkbox2Change(this.checked)\"> 5th wheel detection switch active = lights off, if not coupled </input></p>");
-              }
-              client.println("<script> function Checkbox2Change(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Checkbox2=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Checkbox2=true") >= 0)
-              {
-                fifthWhweelDetectionActive = true;
-                Serial.println("5th wheel detection switch active");
-              }
-              else if (header.indexOf("GET /?Checkbox2=false") >= 0)
-              {
-                fifthWhweelDetectionActive = false;
-                Serial.println("5th wheel detection switch inactive");
-              }
-
-              // Slider1 (taillight brightness) ----------------------------------
-              valueString = String(tailLightBrightness, DEC);
-              client.println("<p>Taillight brightness % : <span id=\"textSlider1Value\">" + valueString + "</span>");
-              client.println("<input type=\"range\" min=\"5\" max=\"100\" step=\"5\" class=\"slider\" id=\"Slider1Input\" onchange=\"Slider1Change(this.value)\" value=\"" + valueString + "\" /></p>");
-              client.println("<script> function Slider1Change(pos) { ");
-              client.println("var slider1Value = document.getElementById(\"Slider1Input\").value;");
-              client.println("document.getElementById(\"textSlider1Value\").innerHTML = slider1Value;");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Slider1=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Slider1=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                tailLightBrightness = (valueString.toInt());
-              }
-
-              // Slider2 (sidelight brightness) ----------------------------------
-              valueString = String(sideLightBrightness, DEC);
-              client.println("<p>Sidelight brightness % : <span id=\"textSlider2Value\">" + valueString + "</span>");
-              client.println("<input type=\"range\" min=\"5\" max=\"100\" step=\"5\" class=\"slider\" id=\"Slider2Input\" onchange=\"Slider2Change(this.value)\" value=\"" + valueString + "\" /></p>");
-              client.println("<script> function Slider2Change(pos) { ");
-              client.println("var slider2Value = document.getElementById(\"Slider2Input\").value;");
-              client.println("document.getElementById(\"textSlider2Value\").innerHTML = slider2Value;");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Slider2=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Slider2=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                sideLightBrightness = (valueString.toInt());
-              }
-
-              // Slider3 (reversing light brightness) ----------------------------------
-              valueString = String(reversingLightBrightness, DEC);
-              client.println("<p>Reversing light brightness % : <span id=\"textSlider3Value\">" + valueString + "</span>");
-              client.println("<input type=\"range\" min=\"5\" max=\"100\" step=\"5\" class=\"slider\" id=\"Slider3Input\" onchange=\"Slider3Change(this.value)\" value=\"" + valueString + "\" /></p>");
-              client.println("<script> function Slider3Change(pos) { ");
-              client.println("var slider3Value = document.getElementById(\"Slider3Input\").value;");
-              client.println("document.getElementById(\"textSlider3Value\").innerHTML = slider3Value;");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Slider3=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Slider3=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                reversingLightBrightness = (valueString.toInt());
-              }
-
-              // Slider4 (indicator light brightness) ----------------------------------
-              valueString = String(indicatorLightBrightness, DEC);
-              client.println("<p>Indicator light brightness % : <span id=\"textSlider4Value\">" + valueString + "</span>");
-              client.println("<input type=\"range\" min=\"5\" max=\"100\" step=\"5\" class=\"slider\" id=\"Slider4Input\" onchange=\"Slider4Change(this.value)\" value=\"" + valueString + "\" /></p>");
-              client.println("<script> function Slider4Change(pos) { ");
-              client.println("var slider4Value = document.getElementById(\"Slider4Input\").value;");
-              client.println("document.getElementById(\"textSlider4Value\").innerHTML = slider4Value;");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?Slider4=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?Slider4=") >= 0)
-              {
-                pos1 = header.indexOf('=');
-                pos2 = header.indexOf('&');
-                valueString = header.substring(pos1 + 1, pos2);
-                indicatorLightBrightness = (valueString.toInt());
-              }
-
-              client.println("<hr>"); // Horizontal line *******************************************************************************************************
-
-              // button1 (Save settings to EEPROM) ----------------------------------
-              client.println("<p><a href=\"/save/on\"><button class=\"button buttonRed\" onclick=\"restartPopup()\" >Save settings & restart</button></a></p>");
-
-              if (header.indexOf("GET /save/on") >= 0)
-              {
-                eepromWrite();
-                delay(1000);
-                ESP.restart();
-              }
-              client.println("<script> function restartPopup() {");
-              client.println("alert(\"Controller restarted, you may need to reconnect WiFi!\"); ");
-              client.println("} </script>");
-
-              client.println("<hr>"); // Horizontal line *******************************************************************************************************
-              /*
-                                                    // button2 (Legs up) ----------------------------------
-                                                    client.println("<p><a href=\"/legs/up\"><button class=\"button buttonGrey\" >Legs up</button></a></p>");
-
-                                                    if (header.indexOf("GET /legs/up") >= 0)
-                                                    {
-                                                      Serial.println("Legs up");
-                                                    }
-
-                                                                  // button3 (Legs down) ----------------------------------
-                                                                  client.println("<p><a href=\"/legs/down\"><button class=\"button buttonGrey\" >Legs down</button></a></p>");
-
-                                                                  if (header.indexOf("GET /legs/down") >= 0)
-                                                                  {
-                                                                    Serial.println("Legs down");
-                                                                  }
-
-                                                                  // button4 (test) ----------------------------------
-                                                                  client.println("<p><button class=\"button buttonGrey\" onclick=\"buttonTestPressed(this)\" >Test button</button></p>");
-                                                                  client.println("<p id=\"demo\"></p>");
-                                                                  */
-              /*
-                            client.println("<script> function buttonTestPressed() { ");
-                              //document.getElementById("demo").innerHTML = "Hello World";
-                            client.println("var slider3Value = document.getElementById(\"demo\").value;");
-                            client.println("} </script>");
-              */
-              /*
-                            client.print(F("<a href='/datastart' target='DataBox'><button type='button'>Agg.Auto</button></a>"));
-              */
-              client.println("<script> function buttonTestPressed(pos) { ");
-              client.println("var xhr = new XMLHttpRequest();");
-              client.println("xhr.open('GET', \"/?testButton=\" + pos + \"&\", true);");
-              client.println("xhr.send(); } </script>");
-
-              if (header.indexOf("GET /?testButton=true") >= 0)
-              {
-                // fifthWhweelDetectionActive = true;
-                Serial.println("Test pressed");
-              }
-              else if (header.indexOf("GET /?testButton=false") >= 0)
-              {
-                // fifthWhweelDetectionActive = false;
-                Serial.println("Test not pressed");
-              }
-
-              //-----------------------------------------------------------------------------------------------------------------------
-              client.println("</body></html>");
-
-              // The HTTP-response ends with an empty column
-              client.println();
-              // Break out of the while loop
-              break;
-            }
-            else
-            { // if you got a newline, then clear currentLine
-              currentLine = "";
-            }
-          }
-          else if (c != '\r')
-          {                   // if you got anything else but a carriage return character,
-            currentLine += c; // add it to the end of the currentLine
-          }
-        }
-      }
-      // Clear header
-      header = "";
-      // Disconnect client
-      client.stop();
-      Serial.println("Client disconnected.");
-
-      Serial.print("5th wheel detection active: ");
-      Serial.println(fifthWhweelDetectionActive);
-      Serial.println("");
-    }
-  }
-}
+#include "src/webInterface.h" // Configuration website
 
 //
 // =======================================================================================================
@@ -1150,4 +877,5 @@ void loop()
   mcpwmOutput();
   led();
   webInterface();
+  batteryProt();
 }
