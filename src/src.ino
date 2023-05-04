@@ -2,7 +2,7 @@
 use it in combination with: https://github.com/TheDIYGuy999/Rc_Engine_Sound_ESP32
 */
 
-char codeVersion[] = "1.0-beta.5"; // Software revision.
+char codeVersion[] = "1.0.0"; // Software revision.
 
 //
 // =======================================================================================================
@@ -79,6 +79,8 @@ char codeVersion[] = "1.0-beta.5"; // Software revision.
 #define INDICATOR_RIGHT_PIN 4  // Orange right indicator (turn signal) light
 #define REVERSING_LIGHT_PIN 17 // (TX2) White reversing light
 #define SIDELIGHT_PIN 18       // Side lights
+#define HEADLIGHT_PIN 22       // Headlights connected to GPIO 22
+#define FOGLIGHT_PIN 16        // (16 = RX2) Fog lights
 
 #define SERVO_1_PIN 13 // Servo CH1 legs
 #define SERVO_2_PIN 12 // Servo CH2 ramps
@@ -96,6 +98,8 @@ statusLED indicatorL(false);
 statusLED indicatorR(false);
 statusLED reversingLight(false);
 statusLED sideLight(false);
+statusLED headLight(false);
+statusLED fogLight(false);
 
 // Battery voltage
 ESP32AnalogRead battery;
@@ -435,6 +439,8 @@ void setup()
   reversingLight.begin(REVERSING_LIGHT_PIN, 4, 20000); // Timer 4, 20kHz
   indicatorL.begin(INDICATOR_LEFT_PIN, 5, 20000);      // Timer 5, 20kHz
   indicatorR.begin(INDICATOR_RIGHT_PIN, 6, 20000);     // Timer 6, 20kHz
+  headLight.begin(HEADLIGHT_PIN, 7, 20000);            // Timer 7, 20kHz
+  fogLight.begin(FOGLIGHT_PIN, 8, 20000);              // Timer 8, 20kHz
 
   // Battery setup
   setupBattery();
@@ -447,6 +453,8 @@ void setup()
   reversingLight.pwm(255 * reversingLightBrightness / 100);
   indicatorL.pwm(255 * indicatorLightBrightness / 100);
   indicatorR.pwm(255 * indicatorLightBrightness / 100);
+  headLight.pwm(255); // For unit testing only
+  fogLight.pwm(255);  // For unit testing only
 
   delay(500); // LED test during 0.5s (all on)
 
@@ -455,6 +463,8 @@ void setup()
   reversingLight.pwm(0);
   indicatorL.pwm(0);
   indicatorR.pwm(0);
+  headLight.pwm(0); // For unit testing only
+  fogLight.pwm(0);  // For unit testing only
 
   delay(2000); // Display serial console
 
